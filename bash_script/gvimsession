@@ -1,0 +1,88 @@
+#!/bin/bash
+
+function errmess
+{
+	echo "error: $1" > /dev/stderr;
+}
+
+function usage_brief
+{
+	echo "Usage: $(basename $0) [ --help ] [ <sessionfile> ]"
+}
+
+function usage
+{
+	usage_brief;
+	echo ""
+	echo "  Open a gvim session file."
+	echo "  If <sessionfile> is given, it must be located in the"
+	echo "  directory specified in the \"g:session_dir\""
+	echo "  variable. The definition of the variable is looked for"
+	echo "  in the sessionmanagment.vim file, either under"
+	echo "  ~/.vim/bundle/vim-sessionmanagment/plugin/ or"
+	echo "  ~/.vim/plugin/, or in the .vimrc file."
+	echo ""
+	echo "  If <sessionfile> is not given, a dialog is shown to choose one."
+}
+
+CURDIR="$PWD"
+
+if [[ "$1" == "--help" ]]
+then
+	usage;
+	exit 1;
+fi
+
+if [ -n "$2" ]
+then
+	errmess "too many arguments";
+	usage_brief;
+	exit 1;
+fi
+
+SEARCH_FILES=(
+	"$HOME/.vim/bundle/vim-sessionmanagment/plugin/sessionmanagment.vim"
+	"$HOME/.vim/plugin/sessionmanagment.vim"
+	"$HOME/.vimrc"
+	)
+
+FOUND=0
+for F in "${SEARCH_FILES[@]}"
+do
+	if [[ -f "$F" ]]
+	then
+		VIM_SESSION_DIR="$(grep "^[[:space:]]*:\?let[[:space:]]\+g:session_dir[[:space:]]\+=" "$F" | cut -d= -f 2 | sed "s%^[[:space:]]*\$HOME[[:space:]]\+\.[[:space:]]\+\"\([^\"]\+\)\"%${HOME}\1%")"
+		echo "VIM_SESSION_DIR=$VIM_SESSION_DIR"
+		if [[ -n "$VIM_SESSION_DIR" ]]
+		then
+			FOUND=1
+			break
+		fi
+	fi
+done
+
+[[ "$FOUND" == 0 ]] && { errmess "Could not infer sessionmanagment directory from ViM configuration files"; exit 1; }
+
+[[ -d "$VIM_SESSION_DIR" ]] || { errmess "ViM session dir \"$VIM_SESSION_DIR\" not found"; exit 1; }
+
+
+#additional_options="-geometry 150x42"
+additional_options="-f"
+
+
+if [ -n "$1" ]
+then
+	SESSION_FILE="${VIM_SESSION_DIR}/$1"
+else
+	SESSION_FILE="$(zenity --file-selection --filename="${VIM_SESSION_DIR}")"
+	if [ $? -ne 0 ]
+	then
+		exit 1;
+	fi
+fi
+
+[ -f "$SESSION_FILE" ] || { errmess "session file \"$SESSION_FILE\" not found"; exit 1; }
+gvim -S "$SESSION_FILE" $additional_options &
+
+cd "$CURDIR"
+
